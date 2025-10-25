@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+
+<html lang="en">
+    <head>
+        <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500&display=swap" rel="stylesheet">
+        <link href="/static/styles.css" rel="stylesheet">
+        <title>Birthdays</title>
+    </head>
+    <body>
+        <div class="header">
+            <h1>Birthdays</h1>
+        </div>
+        <div class="container">
+            <div class="section">
+
+                <h2>Add a Birthday</h2>
+                 <form action = "/" method = "POST">
+                    <label for="name">Name:</label><br>
+                    <input type="text" id="name" name="name"><br>
+                    <label for="day">Day:</label><br>
+                    <input type="number" id="day" name="day"><br>
+                    <label for="month">Month:</label><br>
+                    <input type="number" id="month" name="month">
+                    <input type="submit" value="Submit">
+                </form> 
+            </div>
+
+            <div class="section">
+
+                <h2>All Birthdays</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Birthday</th>
+                            <th class="delete-col">Delete</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for birthday in bdays %}
+                        <tr>
+                            <td> {{ birthday.name }} </td>
+                            <td> {{ birthday.month }}/{{ birthday.day }}</td>
+                            <td class = "delete-col">
+                                <a href="/delete/{{ birthday.id }}">
+                                    Delete
+                                </a>
+                            </td>
+                        </tr>
+
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </body>
+</html>
