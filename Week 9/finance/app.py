@@ -3,6 +3,7 @@ import os
 from cs50 import SQL
 from flask import Flask, flash, redirect, render_template, request, session
 from flask_session import Session
+from datetime import datetime
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from helpers import apology, login_required, lookup, usd
@@ -34,15 +35,67 @@ def after_request(response):
 @app.route("/")
 @login_required
 def index():
-    """Show portfolio of stocks"""
-    return apology("TODO")
+    user_id = session["user_id"]
 
+    holdings = db.execute("SELECT symbol, SUM(shares) AS total_shares FROM transactions WHERE user_id = ? GROUP BY symbol HAVING total_shares > 0", user_id)
+
+    balance = db.execute("SELECT cash FROM users WHERE id = ?", user_id)[0]["cash"]
+
+    portfolio = []
+    total_value = balance
+
+    for stock in holdings:
+        quote = lookup(stock["symbol"])
+        if not quote:
+            return apology("make sure your symbols are valid")
+
+        current_price = quote["price"]
+        total_stock_value = current_price * stock["total_shares"]
+
+        portfolio.append({
+            "symbol": stock["symbol"],
+            "name": quote["name"],
+            "shares": stock["total_shares"],
+            "price": usd(current_price),
+            "total": usd(total_stock_value)
+        })
+
+        total_value += total_stock_value
+
+    return render_template("index.html", portfolio=portfolio, cash=usd(balance), total=usd(total_value))
 
 @app.route("/buy", methods=["GET", "POST"])
 @login_required
 def buy():
-    """Buy shares of stock"""
-    return apology("TODO")
+    if request.method == "POST":
+        symbol = request.form.get("symbol")
+        if not symbol:
+            return apology("missing symbol")
+
+        symbol = symbol.upper()
+        stock = lookup(symbol)
+        if not stock:
+            return apology("invalid symbol")
+        
+        shares_str = request.form.get("shares")
+        if not shares_str or not shares_str.isdigit():
+            return apology("enter a valid number of shares")
+
+        shares = int(shares_str)
+        if shares < 1:
+            return apology("enter a valid number of shares")
+        
+        rows = db.execute("SELECT cash FROM users WHERE id = ?", session["user_id"])
+        cash = rows[0]["cash"]
+        cost = stock["price"] * shares
+        if cash < cost:
+            return apology("you do not have enough money")
+        
+        db.execute("UPDATE users SET cash = ? WHERE id = ?", cash - cost, session["user_id"])
+        db.execute("INSERT INTO transactions (user_id, symbol, shares, price, time) VALUES (?, ?, ?, ?, ?)", session["user_id"], symbol, shares, stock["price"], datetime.now())
+        return render_template("bought.html", stock=stock, cost=cost, balance=usd(cash-cost))
+    else:
+        return render_template("buy.html")
 
 
 @app.route("/history")
@@ -105,8 +158,16 @@ def logout():
 @app.route("/quote", methods=["GET", "POST"])
 @login_required
 def quote():
-    """Get stock quote."""
-    return apology("TODO")
+    if request.method == "POST":
+        symbol = request.form.get("symbol")
+        if not symbol:
+            return apology(" symbol")
+        quote = lookup(symbol)
+        if quote is None:
+            return apology("Invalid symbol")
+        return render_template("quoted.html", quote=quote)
+    else:
+        return render_template("quote.html")
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -132,5 +193,30 @@ def register():
 @app.route("/sell", methods=["GET", "POST"])
 @login_required
 def sell():
-    """Sell shares of stock"""
-    return apology("TODO")
+    sharesRows = db.execute("SELECT DISTINCT symbol FROM transactions GROUP BY symbol HAVING SUM(shares) > 0")
+    sharesTemp = []
+    for share in sharesRows:
+        sharesTemp.append(share["symbol"])
+
+    if request.method == "POST":
+        symbol = request.form.get("symbol")
+        shares = request.form.get("shares")
+        if not symbol:
+            return apology("select a valid symbol")
+        
+        if not shares or int(shares) < 1:
+            return apology("enter a valid number of shares")
+    
+        #check if bros tryna sell more than he has
+        shares = int(shares)
+        rows = db.execute("SELECT SUM(shares) AS total FROM transactions WHERE user_id = ? AND symbol = ?", session["user_id"], symbol)
+        if rows[0] is not None:
+            ownedShares = rows[0]["total"]
+        if shares > ownedShares:
+            return apology("You do not own that many shares")
+        
+        price = lookup(symbol)["price"]
+        db.execute("INSERT INTO transactions (user_id, symbol, shares, price, time) VALUES (?, ?, ?, ?, ?)", session["user_id"], symbol, -shares, price, datetime.now())
+        db.execute("UPDATE users SET cash = cash + ? WHERE id = ?", shares*price, session["user_id"])
+        return redirect("/")
+    return render_template("sell.html", stocks=sharesTemp)
