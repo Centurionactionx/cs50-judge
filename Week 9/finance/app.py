@@ -93,7 +93,7 @@ def buy():
         
         db.execute("UPDATE users SET cash = ? WHERE id = ?", cash - cost, session["user_id"])
         db.execute("INSERT INTO transactions (user_id, symbol, shares, price, time) VALUES (?, ?, ?, ?, ?)", session["user_id"], symbol, shares, stock["price"], datetime.now())
-        return render_template("bought.html", stock=stock, cost=cost, balance=usd(cash-cost))
+        return render_template("bought.html", stock=stock, cost=usd(cost), balance=usd(cash-cost))
     else:
         return render_template("buy.html")
 
@@ -101,8 +101,18 @@ def buy():
 @app.route("/history")
 @login_required
 def history():
-    """Show history of transactions"""
-    return apology("TODO")
+    rows = db.execute("SELECT DISTINCT * FROM transactions")
+    history = []
+    for stock in rows:
+        history.append({
+            "symbol": stock["symbol"],
+            "name": lookup(stock["symbol"])["name"],
+            "type": "Bought" if stock["shares"] > 0 else "Sold",
+            "shares": abs(stock["shares"]),
+            "price": stock["price"],
+            "time": stock["time"]
+        })
+    return render_template("history.html", stocks=history)
 
 
 @app.route("/login", methods=["GET", "POST"])
